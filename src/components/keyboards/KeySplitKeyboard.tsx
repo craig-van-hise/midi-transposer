@@ -555,7 +555,7 @@ export default function KeySplitKeyboard({ onZonesChange }: KeySplitKeyboardProp
                   cursor: 'pointer',
                   boxSizing: 'border-box'
                 }}
-                onMouseDown={(e) => playNote(n)}
+                onMouseDown={() => playNote(n)}
                 onMouseUp={() => releaseNote(n)}
                 onMouseLeave={() => releaseNote(n)}
                 onMouseEnter={(e) => handleKeyEnter(e, n)}

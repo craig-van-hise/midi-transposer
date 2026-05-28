@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react';
 import { useMidiStore, MidiStoreState } from '../store/useMidiStore';
 
 export function useWebMidi() {
-  const activeRoutedNotes = useRef<Map<number, { outNote: number, channel: number, velocity: number }>>(new Map());
+  const activeRoutedNotes = useRef<Map<number, { outNote: number, outNotes: number[], channel: number, velocity: number }>>(new Map());
+  const activeTransposeKeys = useRef<Set<number>>(new Set());
+  const activePlayNote = useRef<number | null>(null);
 
   const triggerVisualNoteFeedback = (note: number, isActive: boolean, color: string) => {
     const el = document.getElementById(`pk88f-${note}`);
@@ -19,21 +21,10 @@ export function useWebMidi() {
     }
   };
 
-  const calculateFinalNote = (incomingNote: number, state: MidiStoreState) => {
-    const {
-      playOctave,
-      transposeTarget,
-      transposeOrigin,
-      filterRange,
-      filterMode,
-    } = state;
-
-    const effectiveNote = incomingNote + (playOctave * 12);
-    const delta = transposeTarget - transposeOrigin;
-    let finalNote = effectiveNote + delta;
-
-    // Apply Note Range Filter mapping
+  const filterAndLimitNote = (transposedNote: number, state: MidiStoreState) => {
+    const { filterRange, filterMode } = state;
     const [min, max] = filterRange;
+    let finalNote = transposedNote;
     let shouldDrop = false;
 
     if (filterMode === 'block') {
@@ -64,6 +55,27 @@ export function useWebMidi() {
 
     const outNote = Math.max(0, Math.min(127, finalNote));
     return { outNote, shouldDrop };
+  };
+
+
+  const calculateFinalNotes = (incomingNote: number, state: MidiStoreState) => {
+    const { playOctave, transposeTargets, transposeTarget, transposeOrigin } = state;
+    const effectiveNote = incomingNote + (playOctave * 12);
+    
+    // Fallback to transposeTarget if transposeTargets is out of sync or empty
+    const targets = transposeTargets && transposeTargets.includes(transposeTarget)
+      ? transposeTargets
+      : [transposeTarget];
+
+    const deltas = targets.map(t => t - transposeOrigin);
+    const outNotes: number[] = [];
+    for (const d of deltas) {
+      const { outNote, shouldDrop } = filterAndLimitNote(effectiveNote + d, state);
+      if (!shouldDrop) {
+        outNotes.push(outNote);
+      }
+    }
+    return outNotes;
   };
 
   const { 
@@ -178,7 +190,9 @@ export function useWebMidi() {
         bypass,
         zones,
         transposeOctave,
-        setTransposeTarget,
+        setTransposeTargets,
+        transposeTargets,
+        polyphonyMode,
         midiOutputs,
       } = state;
 
@@ -202,26 +216,55 @@ export function useWebMidi() {
       if (activeZone.type === 'transpose') {
         // Transpose Zone (Left)
         const effectiveNote = incomingNote + (transposeOctave * 12);
-        if (isNoteOn) {
-          setTransposeTarget(effectiveNote);
+        if (polyphonyMode === 'mono') {
+          if (isNoteOn) {
+            setTransposeTargets([effectiveNote]);
+          }
+        } else {
+          // poly mode
+          if (isNoteOn) {
+            const size = activeTransposeKeys.current.size;
+            if (size === 0) {
+              setTransposeTargets([effectiveNote]);
+            } else {
+              if (!transposeTargets.includes(effectiveNote)) {
+                setTransposeTargets([...transposeTargets, effectiveNote]);
+              }
+            }
+            activeTransposeKeys.current.add(incomingNote);
+          } else {
+            activeTransposeKeys.current.delete(incomingNote);
+          }
         }
         // Do NOT send to MIDI output.
       } else if (activeZone.type === 'play') {
         if (!isNoteOn) {
+          if (polyphonyMode === 'poly') {
+            if (activePlayNote.current !== incomingNote) {
+              return; // Return early and drop the Note Off message
+            }
+            activePlayNote.current = null;
+          }
+
           // Note Off Handling: Use active routed note pitch if exists
           const activeNote = activeRoutedNotes.current.get(incomingNote);
           if (activeNote) {
-            // Trigger visual feedback on the Output Keyboard using the old note
-            triggerVisualNoteFeedback(activeNote.outNote, false, activeZone.color);
+            // Trigger visual feedback on the Output Keyboard using the old notes
+            const notesToTurnOff = activeNote.outNotes || [activeNote.outNote];
+            notesToTurnOff.forEach(outNote => {
+              triggerVisualNoteFeedback(outNote, false, activeZone.color);
+            });
 
-            // Send to physical MIDI outputs using the old channel/pitch
-            const outMsg = new Uint8Array([0x80 | activeNote.channel, activeNote.outNote, velocity]);
-            midiOutputs.forEach((output) => {
-              try {
-                output.send(outMsg);
-              } catch (err) {
-                console.error('Failed to send routed MIDI message:', err);
-              }
+            // Send to physical MIDI outputs using the old channel/pitches
+            notesToTurnOff.forEach(outNote => {
+              const outMsg = new Uint8Array([0x80 | activeNote.channel, outNote, velocity]);
+              midiOutputs.forEach((output) => {
+                try {
+                  output.send(outMsg);
+                } catch (err) {
+                  console.error('Failed to send routed MIDI message:', err);
+                }
+              });
             });
             activeRoutedNotes.current.delete(incomingNote);
           }
@@ -229,25 +272,58 @@ export function useWebMidi() {
         }
 
         // Note On Handling
-        const { outNote, shouldDrop } = calculateFinalNote(incomingNote, state);
+        if (polyphonyMode === 'poly') {
+          if (activePlayNote.current !== null && activePlayNote.current !== incomingNote) {
+            const prevNoteData = activeRoutedNotes.current.get(activePlayNote.current);
+            if (prevNoteData) {
+              const notesToTurnOff = prevNoteData.outNotes || [prevNoteData.outNote];
+              notesToTurnOff.forEach(outNote => {
+                triggerVisualNoteFeedback(outNote, false, activeZone.color);
+              });
+              notesToTurnOff.forEach(outNote => {
+                const outMsg = new Uint8Array([0x80 | prevNoteData.channel, outNote, 0]);
+                midiOutputs.forEach((output) => {
+                  try {
+                    output.send(outMsg);
+                  } catch (err) {
+                    console.error('Failed to send routed MIDI message:', err);
+                  }
+                });
+              });
+              activeRoutedNotes.current.delete(activePlayNote.current);
+            }
+          }
+          activePlayNote.current = incomingNote;
+        }
 
-        if (!shouldDrop) {
+        const outNotes = calculateFinalNotes(incomingNote, state);
+
+        if (outNotes.length > 0) {
           // Trigger visual feedback on the Output Keyboard
-          triggerVisualNoteFeedback(outNote, true, activeZone.color);
+          outNotes.forEach(outNote => {
+            triggerVisualNoteFeedback(outNote, true, activeZone.color);
+          });
 
           // Send to physical MIDI outputs
           const outputStatus = 0x90 | channel;
-          const outMsg = new Uint8Array([outputStatus, outNote, velocity]);
-          midiOutputs.forEach((output) => {
-            try {
-              output.send(outMsg);
-            } catch (err) {
-              console.error('Failed to send routed MIDI message:', err);
-            }
+          outNotes.forEach(outNote => {
+            const outMsg = new Uint8Array([outputStatus, outNote, velocity]);
+            midiOutputs.forEach((output) => {
+              try {
+                output.send(outMsg);
+              } catch (err) {
+                console.error('Failed to send routed MIDI message:', err);
+              }
+            });
           });
 
-          // Add to active notes tracking map
-          activeRoutedNotes.current.set(incomingNote, { outNote, channel, velocity });
+          // Add to active notes tracking map (keep outNote for compatibility)
+          activeRoutedNotes.current.set(incomingNote, { 
+            outNote: outNotes[0], 
+            outNotes, 
+            channel, 
+            velocity 
+          });
         }
       }
     };
@@ -259,30 +335,50 @@ export function useWebMidi() {
     };
   }, [selectedInputId, midiInputs]);
 
-  // Handle active note cutoff/retrigger when transposeTarget changes
+  // Handle active note cutoff/retrigger when transposeTarget or transposeTargets changes
   useEffect(() => {
+    const arraysEqual = (a: number[], b: number[]) => {
+      if (a === b) return true;
+      if (!a || !b) return false;
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; ++i) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    };
+
     const unsub = useMidiStore.subscribe((state, prevState) => {
-      if (state.transposeTarget === prevState.transposeTarget) return;
+      const targetsChanged = !arraysEqual(state.transposeTargets, prevState.transposeTargets);
+      if (!targetsChanged && state.transposeTarget === prevState.transposeTarget) return;
       if (state.transposeHoldMode === 'sustain') return;
 
       activeRoutedNotes.current.forEach((activeData, incomingNote) => {
-        // 1. Always send Note Off for the currently playing note
-        state.midiOutputs.forEach(out => out.send(new Uint8Array([0x80 | activeData.channel, activeData.outNote, 0])));
-        triggerVisualNoteFeedback(activeData.outNote, false, '#3b82f6');
+        // 1. Always send Note Off for the currently playing notes
+        const notesToTurnOff = activeData.outNotes || [activeData.outNote];
+        notesToTurnOff.forEach(outNote => {
+          state.midiOutputs.forEach(out => out.send(new Uint8Array([0x80 | activeData.channel, outNote, 0])));
+          triggerVisualNoteFeedback(outNote, false, '#3b82f6');
+        });
 
         if (state.transposeHoldMode === 'cutoff') {
           activeRoutedNotes.current.delete(incomingNote);
         } 
         else if (state.transposeHoldMode === 'retrigger') {
-          // 2. Calculate new note
-          const { outNote: newOut, shouldDrop } = calculateFinalNote(incomingNote, state);
-          if (!shouldDrop) {
+          // 2. Calculate new notes
+          const newOutNotes = calculateFinalNotes(incomingNote, state);
+          if (newOutNotes.length > 0) {
             // 3. Send new Note On and update Map
-            state.midiOutputs.forEach(out => out.send(new Uint8Array([0x90 | activeData.channel, newOut, activeData.velocity])));
             const activeZone = state.zones.find(z => incomingNote >= z.startNote && incomingNote <= z.endNote);
             const color = activeZone ? activeZone.color : '#3b82f6';
-            triggerVisualNoteFeedback(newOut, true, color);
-            activeRoutedNotes.current.set(incomingNote, { ...activeData, outNote: newOut });
+            newOutNotes.forEach(outNote => {
+              state.midiOutputs.forEach(out => out.send(new Uint8Array([0x90 | activeData.channel, outNote, activeData.velocity])));
+              triggerVisualNoteFeedback(outNote, true, color);
+            });
+            activeRoutedNotes.current.set(incomingNote, { 
+              ...activeData, 
+              outNote: newOutNotes[0], 
+              outNotes: newOutNotes 
+            });
           } else {
             activeRoutedNotes.current.delete(incomingNote);
           }

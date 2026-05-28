@@ -26,6 +26,8 @@ export interface MidiStoreState {
   playOctave: number;
   transposeOrigin: number;
   transposeTarget: number;
+  transposeTargets: number[];
+  polyphonyMode: 'mono' | 'poly';
   midiAccessStatus: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error';
   midiErrorText: string | null;
   transposeHoldMode: TransposeHoldMode;
@@ -43,6 +45,8 @@ export interface MidiStoreState {
   setPlayOctave: (octave: number) => void;
   setTransposeOrigin: (origin: number) => void;
   setTransposeTarget: (target: number) => void;
+  setTransposeTargets: (targets: number[]) => void;
+  setPolyphonyMode: (mode: 'mono' | 'poly') => void;
   setMidiAccessStatus: (status: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error') => void;
   setMidiErrorText: (text: string | null) => void;
   setTransposeHoldMode: (mode: TransposeHoldMode) => void;
@@ -66,6 +70,8 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   playOctave: 0,
   transposeOrigin: 60,
   transposeTarget: 60,
+  transposeTargets: [60],
+  polyphonyMode: 'mono',
   midiAccessStatus: 'pending',
   midiErrorText: null,
   transposeHoldMode: 'sustain',
@@ -82,7 +88,15 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   setTransposeOctave: (transposeOctave) => set({ transposeOctave }),
   setPlayOctave: (playOctave) => set({ playOctave }),
   setTransposeOrigin: (transposeOrigin) => set({ transposeOrigin }),
-  setTransposeTarget: (transposeTarget) => set({ transposeTarget }),
+  setTransposeTarget: (transposeTarget) => set({ 
+    transposeTarget,
+    transposeTargets: [transposeTarget]
+  }),
+  setTransposeTargets: (transposeTargets) => set({
+    transposeTargets,
+    transposeTarget: transposeTargets[0] ?? 60
+  }),
+  setPolyphonyMode: (polyphonyMode) => set({ polyphonyMode }),
   setMidiAccessStatus: (midiAccessStatus) => set({ midiAccessStatus }),
   setMidiErrorText: (midiErrorText) => set({ midiErrorText }),
   setTransposeHoldMode: (transposeHoldMode) => set({ transposeHoldMode }),

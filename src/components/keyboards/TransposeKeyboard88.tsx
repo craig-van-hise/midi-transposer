@@ -43,12 +43,19 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
     transposeOrigin: originNote,
     setTransposeOrigin: setOriginNote,
     transposeTarget: targetNote,
-    setTransposeTarget: setTargetNote,
+    transposeTargets,
+    setTransposeTargets,
+    polyphonyMode,
+    setPolyphonyMode,
     transposeHoldMode,
     setTransposeHoldMode,
   } = useMidiStore();
+
+  const activeTargets = transposeTargets && transposeTargets.includes(targetNote)
+    ? transposeTargets
+    : [targetNote];
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
@@ -72,10 +79,18 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
     const r = NoteRects[DEFAULT_ORIGIN];
     return r ? r.x + (r.w / 2) : 0;
   });
-  const [handleX, setHandleX] = useState(() => {
-    const r = NoteRects[DEFAULT_ORIGIN];
-    return r ? r.x + (r.w / 2) : 0;
-  });
+
+  const getHandleX = (note: number) => {
+    const targetEl = document.getElementById(`pktranspose-${note}`);
+    if (targetEl && wrapperRef.current) {
+        const targetRect = targetEl.getBoundingClientRect();
+        const wrapperRect = wrapperRef.current.getBoundingClientRect();
+        return targetRect.left - wrapperRect.left + (targetRect.width / 2);
+    } else {
+        const r = NoteRects[note];
+        return r ? r.x + (r.w / 2) : 0;
+    }
+  };
 
   // Recalculate positions based on DOM
   const updatePositions = () => {
@@ -94,19 +109,6 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
         const r = NoteRects[originNote];
         originCenter = r ? r.x + (r.w / 2) : 0;
         setOriginX(originCenter);
-    }
-    
-    // Find current target center
-    const targetEl = document.getElementById(`pktranspose-${targetNote}`);
-    if (targetEl && wrapperRef.current) {
-        const targetRect = targetEl.getBoundingClientRect();
-        const wrapperRect = wrapperRef.current.getBoundingClientRect();
-        setHandleX(targetRect.left - wrapperRect.left + (targetRect.width / 2));
-    } else {
-        const r = NoteRects[targetNote];
-        if (r) {
-            setHandleX(r.x + (r.w / 2));
-        }
     }
   };
 
@@ -143,20 +145,23 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !wrapperRef.current) return;
+      if (draggingIndex === null || !wrapperRef.current) return;
       const rect = wrapperRef.current.getBoundingClientRect();
       const localX = e.clientX - rect.left;
       const note = getClosestNote(localX);
-      setTargetNote(note);
+      
+      const newTargets = [...activeTargets];
+      newTargets[draggingIndex] = note;
+      setTransposeTargets(newTargets);
     };
 
     const handleMouseUp = () => {
-      if (isDragging) {
-        setIsDragging(false);
+      if (draggingIndex !== null) {
+        setDraggingIndex(null);
       }
     };
 
-    if (isDragging) {
+    if (draggingIndex !== null) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -164,31 +169,57 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging]);
+  }, [draggingIndex, activeTargets]);
 
   const handleTrackMouseDown = (e: React.MouseEvent) => {
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
     const localX = e.clientX - rect.left;
     const note = getClosestNote(localX);
-    setTargetNote(note);
-    setIsDragging(true);
+    
+    if (polyphonyMode === 'mono') {
+      setTransposeTargets([note]);
+      setDraggingIndex(0);
+    } else {
+      let closestIdx = 0;
+      let minDiff = Infinity;
+      activeTargets.forEach((t, idx) => {
+        const diff = Math.abs(t - note);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = idx;
+        }
+      });
+      const newTargets = [...activeTargets];
+      newTargets[closestIdx] = note;
+      setTransposeTargets(newTargets);
+      setDraggingIndex(closestIdx);
+    }
   };
 
   const handleKeyClick = (e: React.MouseEvent, note: number) => {
     if (e.shiftKey || e.altKey) {
       setOriginNote(note);
     } else {
-      setTargetNote(note);
+      if (polyphonyMode === 'mono') {
+        setTransposeTargets([note]);
+      } else {
+        if (activeTargets.includes(note)) {
+          if (activeTargets.length > 1) {
+            setTransposeTargets(activeTargets.filter(t => t !== note));
+          }
+        } else {
+          setTransposeTargets([...activeTargets, note]);
+        }
+      }
     }
   };
 
-  const transposeValue = targetNote - originNote;
-  const trackFillStart = Math.min(originX, handleX);
-  const trackFillWidth = Math.abs(handleX - originX);
+  const primaryHandleX = getHandleX(targetNote);
+  const trackFillStart = Math.min(originX, primaryHandleX);
+  const trackFillWidth = Math.abs(primaryHandleX - originX);
   
   // Format the label with explicit + or - sign
-  const displayLabel = transposeValue > 0 ? `+${transposeValue}` : `${transposeValue}`;
   
   return (
     <div 
@@ -214,20 +245,48 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
 
       {/* Transpose Settings Gear Icon / Dropdown */}
       <div 
-        className="absolute top-[10px] right-[14px] flex items-center z-30"
+        className="absolute top-[10px] right-[14px] flex items-center z-30 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
         ref={settingsRef}
+        title="Transpose Settings"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsSettingsOpen(!isSettingsOpen);
+        }}
       >
         <Settings 
-          className="w-4 h-4 text-gray-700 cursor-pointer opacity-70 hover:opacity-100 transition-opacity" 
+          className="w-4 h-4 text-gray-700 pointer-events-none" 
           strokeWidth={2.5}
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsSettingsOpen(!isSettingsOpen);
-          }}
-          title="Transpose Settings" 
         />
         {isSettingsOpen && (
           <div className="absolute right-0 top-[24px] w-[240px] bg-white border border-gray-200 rounded-md shadow-lg p-3 z-50 flex flex-col gap-2.5 text-left font-sans select-none text-gray-800">
+            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Polyphony Mode</span>
+            <div className="flex gap-4 mb-1">
+              <label className="flex items-center gap-1.5 cursor-pointer text-[13px]">
+                <input 
+                  type="radio" 
+                  name="polyphonyMode" 
+                  value="mono" 
+                  checked={polyphonyMode === 'mono'} 
+                  onChange={() => setPolyphonyMode('mono')}
+                  className="accent-rose-500 cursor-pointer"
+                />
+                <span className="font-semibold text-gray-800">Mono</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer text-[13px]">
+                <input 
+                  type="radio" 
+                  name="polyphonyMode" 
+                  value="poly" 
+                  checked={polyphonyMode === 'poly'} 
+                  onChange={() => setPolyphonyMode('poly')}
+                  className="accent-rose-500 cursor-pointer"
+                />
+                <span className="font-semibold text-gray-800">Poly</span>
+              </label>
+            </div>
+
+            <hr className="border-gray-100" />
+
             <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Transpose Hold Mode</span>
             <div className="flex flex-col gap-2">
               <label className="flex items-start gap-2 cursor-pointer text-[13px] hover:bg-gray-50 p-1.5 rounded">
@@ -302,26 +361,62 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
               />
             </div>
 
-            {/* The Pointer Handle */}
-            <div 
-              className="absolute top-1/2 -translate-y-[65%] flex flex-col items-center justify-center cursor-ew-resize z-20 group transition-transform duration-75"
-              style={{ left: handleX - 20 }}
-              onMouseDown={(e) => {
-                 e.stopPropagation();
-                 setIsDragging(true);
-              }}
-            >
-              <div className="w-[40px] h-[26px] bg-white border-2 border-rose-500 rounded-md shadow-md flex items-center justify-center font-mono text-sm font-bold text-gray-800 z-10">
-                {displayLabel}
-              </div>
-              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-rose-500 -mt-[1px] z-0" />
-            </div>
+            {/* The Pointer Handles */}
+            {(() => {
+              const activeTargets = transposeTargets && transposeTargets.includes(targetNote)
+                ? transposeTargets
+                : [targetNote];
+              const sorted = [...activeTargets].sort((a, b) => a - b);
+              const tiers: Record<number, number> = {};
+              let prevX = -Infinity;
+              let prevTier = 0;
+
+              sorted.forEach((note) => {
+                const x = getHandleX(note);
+                let tier = 0;
+                if (x - prevX < 42) {
+                  tier = (prevTier + 1) % 2;
+                } else {
+                  tier = 0;
+                }
+                tiers[note] = tier;
+                prevX = x;
+                prevTier = tier;
+              });
+
+              return activeTargets.map((target, idx) => {
+                const handleXValue = getHandleX(target);
+                const tier = tiers[target] || 0;
+                const handleTransposeVal = target - originNote;
+                const displayLabelVal = handleTransposeVal > 0 ? `+${handleTransposeVal}` : `${handleTransposeVal}`;
+                return (
+                  <div 
+                    key={target}
+                    data-testid={`transpose-handle-${target}`}
+                    className="absolute top-1/2 flex flex-col items-center justify-center cursor-ew-resize z-20 group transition-transform duration-75"
+                    style={{ 
+                      left: handleXValue - 20,
+                      transform: `translateY(${tier === 0 ? '-100%' : '20%'})`
+                    }}
+                    onMouseDown={(e) => {
+                       e.stopPropagation();
+                       setDraggingIndex(idx);
+                    }}
+                  >
+                    <div className="w-[40px] h-[26px] bg-white border-2 border-rose-500 rounded-md shadow-md flex items-center justify-center font-mono text-sm font-bold text-gray-800 z-10">
+                      {displayLabelVal}
+                    </div>
+                    <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-rose-500 -mt-[1px] z-0" />
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           {/* Lower Surface - Physical Keyboard */}
           <div ref={wrapperRef} id="keyboard-wrapper" className="relative flex w-[988px] h-[88px] bg-white pointer-events-auto border-t border-[#7a7a7a]" style={{ boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>
             {whiteKeys.map((n) => {
-              const isActive = n === targetNote;
+              const isActive = activeTargets.includes(n);
               const isOrigin = n === originNote;
               const isC = n % 12 === 0;
               const octave = Math.floor(n / 12) - 1;
@@ -365,7 +460,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
             })}
             
             {blackKeys.map((n) => {
-              const isActive = n === targetNote;
+              const isActive = activeTargets.includes(n);
               const isOrigin = n === originNote;
               return (
                 <div

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FilterMode, useMidiStore } from '../../store/useMidiStore';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Settings } from 'lucide-react';
 
 export const WHITE_KEY_WIDTH = 19;
 export const WHITE_KEY_HEIGHT = 88;
@@ -122,8 +122,8 @@ export const RangeSlider: React.FC<RangeSliderProps> = ({ min, max, value, onVal
         />
 
         {/* Thumbs */}
-        <Thumb x={x1} value={value[0]} type="min" onPointerDown={(e) => handlePointerDown(e, 'min')} isDragging={draggingThumb === 'min'} />
-        <Thumb x={x2} value={value[1]} type="max" onPointerDown={(e) => handlePointerDown(e, 'max')} isDragging={draggingThumb === 'max'} />
+        <Thumb x={x1} value={value[0]} type="min" onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => handlePointerDown(e, 'min')} isDragging={draggingThumb === 'min'} />
+        <Thumb x={x2} value={value[1]} type="max" onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => handlePointerDown(e, 'max')} isDragging={draggingThumb === 'max'} />
       </div>
     </div>
   );
@@ -280,8 +280,19 @@ export const NoteRangeFilterKeyboard: React.FC<NoteRangeFilterKeyboardProps> = (
     }
   };
 
-  const [hoveredMode, setHoveredMode] = React.useState<FilterMode | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   return (
     <div 
@@ -307,37 +318,50 @@ export const NoteRangeFilterKeyboard: React.FC<NoteRangeFilterKeyboardProps> = (
           <span className="font-semibold text-[14px] text-gray-700 select-none">Output</span>
         </div>
 
-        {!isCollapsed && (
-          <div className="absolute left-[446px] -translate-x-1/2 flex items-center gap-4">
-            <label className="text-xs font-bold tracking-widest text-neutral-400 uppercase">FILTER MODE</label>
-            <div className="flex p-1 rounded-lg border border-neutral-300 bg-neutral-50 z-20" data-testid="toggle-container">
-              {(['block', 'octave_wrap', 'wrap', 'limit'] as FilterMode[]).map((mode) => (
-                <div key={mode} className="relative flex items-center justify-center">
-                  <button
-                    onClick={() => onModeChange(mode)}
-                    onMouseEnter={() => setHoveredMode(mode)}
-                    onMouseLeave={() => setHoveredMode(null)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      activeMode === mode 
-                        ? 'bg-blue-600 text-white shadow' 
-                        : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
-                    }`}
-                  >
-                    {mode === 'block' ? 'Block' :
-                     mode === 'octave_wrap' ? 'Octave Wrap' :
-                     mode === 'wrap' ? 'Wrap' : 'Limit'}
-                  </button>
-                  {hoveredMode === mode && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white text-neutral-800 text-xs px-3 py-2 rounded shadow-lg border border-neutral-200 w-48 text-center pointer-events-none animate-in fade-in zoom-in-95 duration-150" data-testid="tooltip">
-                      {MODE_DESCRIPTIONS[mode]}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-neutral-700" data-testid="tooltip-caret" />
+        {/* Output Settings Gear Icon / Dropdown */}
+        <div 
+          className="absolute top-[10px] right-[14px] flex items-center z-30 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+          ref={settingsRef}
+          title="Output Filter Settings"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsSettingsOpen(!isSettingsOpen);
+          }}
+        >
+          <Settings 
+            className="w-4 h-4 text-gray-700" 
+            strokeWidth={2.5}
+          />
+          {isSettingsOpen && (
+            <div className="absolute right-0 top-[24px] w-[240px] bg-white border border-gray-200 rounded-md shadow-lg p-3 z-50 flex flex-col gap-2.5 text-left font-sans select-none text-gray-800">
+              <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Filter Mode</span>
+              <div className="flex flex-col gap-2">
+                {(['block', 'limit', 'octave_wrap', 'wrap'] as FilterMode[]).map((mode) => (
+                  <label key={mode} className="flex items-start gap-2 cursor-pointer text-[13px] hover:bg-gray-50 p-1.5 rounded" data-testid={`filter-mode-option-${mode}`}>
+                    <input 
+                      type="radio" 
+                      name="filterMode" 
+                      value={mode} 
+                      checked={activeMode === mode} 
+                      onChange={() => onModeChange(mode)}
+                      className="mt-[3px] accent-blue-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-800">
+                        {mode === 'block' ? 'Block' :
+                         mode === 'limit' ? 'Limit' :
+                         mode === 'octave_wrap' ? 'Octave Wrap' : 'Wrap'}
+                      </div>
+                      <div className="text-[11px] text-gray-500 font-normal leading-tight">
+                        {MODE_DESCRIPTIONS[mode]}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {!isCollapsed && (

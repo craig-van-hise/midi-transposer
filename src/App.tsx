@@ -1,4 +1,3 @@
-import React from 'react';
 import Header from './components/Header';
 import KeySplitKeyboard from './components/keyboards/KeySplitKeyboard';
 import TransposeKeyboard88 from './components/keyboards/TransposeKeyboard88';

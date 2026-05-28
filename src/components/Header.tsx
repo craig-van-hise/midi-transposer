@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Power, Info, Settings, TriangleAlert } from 'lucide-react';
 import { useMidiStore } from '../store/useMidiStore';
 

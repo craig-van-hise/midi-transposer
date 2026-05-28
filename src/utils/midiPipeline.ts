@@ -45,7 +45,7 @@ export function processMidiMessage(
     note += zone.octave * 12;
 
     // Map to zone's channel
-    const targetChannel = zone.channel - 1; // 0-15
+    const targetChannel = channel - 1; // 0-15
     const targetStatus = statusType | targetChannel;
 
     // 4. Transpose Stage

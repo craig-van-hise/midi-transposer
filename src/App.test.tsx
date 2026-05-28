@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import React from 'react';
 import App from './App';
 
 describe('Application Assembly Phase 5.5 TDD Checkpoint', () => {
@@ -15,7 +14,7 @@ describe('Application Assembly Phase 5.5 TDD Checkpoint', () => {
       requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
     });
 
-    let container: HTMLElement;
+    let container: HTMLElement = null!;
     await act(async () => {
       const rendered = render(<App />);
       container = rendered.container;
@@ -32,7 +31,7 @@ describe('Application Assembly Phase 5.5 TDD Checkpoint', () => {
     // TransposeKeyboard88 contains the transpose label
     expect(screen.getAllByText('Transpose')[0]).toBeInTheDocument();
 
-    // NoteRangeFilterKeyboard contains the block mode filter button
-    expect(screen.getByText('Block')).toBeInTheDocument();
+    // NoteRangeFilterKeyboard contains the Output label
+    expect(screen.getByText('Output')).toBeInTheDocument();
   });
 });

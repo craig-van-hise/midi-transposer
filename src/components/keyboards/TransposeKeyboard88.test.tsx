@@ -1,6 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import TransposeKeyboard88 from './TransposeKeyboard88';
 import { useMidiStore } from '../../store/useMidiStore';
 
@@ -55,5 +54,20 @@ describe('TransposeKeyboard88 Zustand Wiring Phase 4 TDD Checkpoint', () => {
     // Caret under handle should be border-t-rose-500
     const caret = container.querySelector('.border-t-rose-500');
     expect(caret).toBeInTheDocument();
+  });
+
+  it('Test Case 1: Array [60, 61] forces handle 61 into tier 1 (staggered) to prevent visual overlap', () => {
+    useMidiStore.setState({
+      transposeOrigin: 60,
+      transposeTargets: [60, 61],
+    });
+
+    render(<TransposeKeyboard88 />);
+
+    const handle60 = screen.getByTestId('transpose-handle-60');
+    const handle61 = screen.getByTestId('transpose-handle-61');
+
+    expect(handle60.style.transform).toBe('translateY(-100%)');
+    expect(handle61.style.transform).toBe('translateY(20%)');
   });
 });

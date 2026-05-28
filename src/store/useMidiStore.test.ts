@@ -538,4 +538,291 @@ describe('Web MIDI Hook - Cutoff & Retrigger Engine Phase 3 TDD Checkpoint', () 
   });
 });
 
+describe('Polyphonic Upgrades Phase 1 TDD Checkpoint', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('Test Case 1: polyphonyMode === poly, transposeTargets === [64, 67]. Input C4 (60) yields Note Ons for E4 (64) and G4 (67). Map stores [64, 67]', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const sendMock = vi.fn();
+    const mockOutput = {
+      id: 'output-1',
+      send: sendMock,
+    } as unknown as WebMidi.MIDIOutput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map([['output-1', mockOutput]]),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      midiOutputs: [mockOutput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTargets: [64, 67],
+      polyphonyMode: 'poly',
+      filterMode: 'block',
+      filterRange: [21, 108],
+    });
+
+    const { result } = renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Send Note On for input note 60 (C4)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 60, 100]) });
+    });
+
+    // Assert both E4 (64) and G4 (67) were sent
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 64, 100]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 67, 100]));
+
+    // Assert map contains [64, 67]
+    const activeRoutedNotes = result.current.activeRoutedNotes;
+    expect(activeRoutedNotes.current.get(60)).toEqual(expect.objectContaining({
+      outNotes: [64, 67]
+    }));
+  });
+
+  it('Test Case 2: Note Off C4 (60) correctly silences both 64 and 67 via map lookup', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const sendMock = vi.fn();
+    const mockOutput = {
+      id: 'output-1',
+      send: sendMock,
+    } as unknown as WebMidi.MIDIOutput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map([['output-1', mockOutput]]),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      midiOutputs: [mockOutput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTargets: [64, 67],
+      polyphonyMode: 'poly',
+      filterMode: 'block',
+      filterRange: [21, 108],
+    });
+
+    const { result } = renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Send Note On for input note 60 (C4)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 60, 100]) });
+    });
+
+    // Send Note Off for input note 60 (C4)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x80, 60, 0]) });
+    });
+
+    // Assert Note Offs sent for both 64 and 67
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 64, 0]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 67, 0]));
+
+    // Assert map is cleared
+    const activeRoutedNotes = result.current.activeRoutedNotes;
+    expect(activeRoutedNotes.current.has(60)).toBe(false);
+  });
+});
+
+describe('Polyphonic Chord Latching TDD Checkpoint', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('Test Cases 1, 2, 3: Overwrite transpose targets on first note, append on subsequent notes, latch on release', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map(),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTargets: [60],
+      polyphonyMode: 'poly',
+    });
+
+    renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Test Case 1: plays Note On 48. Target becomes [48]
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 48, 100]) });
+    });
+    expect(useMidiStore.getState().transposeTargets).toEqual([48]);
+
+    // Test Case 2: plays Note On 52 while holding 48. Target becomes [48, 52]
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 52, 100]) });
+    });
+    expect(useMidiStore.getState().transposeTargets).toEqual([48, 52]);
+
+    // Test Case 3: release both keys. Targets should remain [48, 52] (latched)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x80, 48, 0]) });
+      messageCallback!({ data: new Uint8Array([0x80, 52, 0]) });
+    });
+    expect(useMidiStore.getState().transposeTargets).toEqual([48, 52]);
+  });
+});
+
+describe('Play Zone Last-Note Priority TDD Checkpoint', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('Test Cases 1, 2, 3: Play zone monophonic last-note priority when polyphonyMode === poly', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const sendMock = vi.fn();
+    const mockOutput = {
+      id: 'output-1',
+      send: sendMock,
+    } as unknown as WebMidi.MIDIOutput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map([['output-1', mockOutput]]),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      midiOutputs: [mockOutput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTarget: 64,
+      transposeTargets: [64, 67], // E4, G4 chord (+4, +7 semitones)
+      polyphonyMode: 'poly',
+    });
+
+    renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Test Case 1: user holds C4 (60). C4 chord sounds (64, 67).
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 60, 100]) });
+    });
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 64, 100]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 67, 100]));
+
+    // User plays D4 (62) while holding C4. D4 chord sounds (66, 69) and C4 chord cuts off (64, 67 Note Offs).
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 62, 100]) });
+    });
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 64, 0]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 67, 0]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 66, 100]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 69, 100]));
+
+    // Test Case 2: User releases C4 (which was already silenced). Verify no new Note Offs are sent.
+    const callsCountBeforeRelease = sendMock.mock.calls.length;
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x80, 60, 0]) });
+    });
+    expect(sendMock.mock.calls.length).toBe(callsCountBeforeRelease);
+
+    // Test Case 3: User releases D4. Verify D4 chord receives Note Offs (66, 69).
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x80, 62, 0]) });
+    });
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 66, 0]));
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 69, 0]));
+  });
+});
+
+
 
