@@ -10,6 +10,7 @@ export interface Zone {
 }
 
 export type FilterMode = 'block' | 'limit' | 'octave_wrap' | 'wrap';
+export type TransposeHoldMode = 'sustain' | 'cutoff' | 'retrigger';
 
 export interface MidiStoreState {
   bypass: boolean;
@@ -27,6 +28,7 @@ export interface MidiStoreState {
   transposeTarget: number;
   midiAccessStatus: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error';
   midiErrorText: string | null;
+  transposeHoldMode: TransposeHoldMode;
 
   toggleBypass: () => void;
   setActiveChannels: (channels: number[]) => void;
@@ -43,6 +45,7 @@ export interface MidiStoreState {
   setTransposeTarget: (target: number) => void;
   setMidiAccessStatus: (status: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error') => void;
   setMidiErrorText: (text: string | null) => void;
+  setTransposeHoldMode: (mode: TransposeHoldMode) => void;
   panic: () => void;
 }
 
@@ -65,6 +68,7 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   transposeTarget: 60,
   midiAccessStatus: 'pending',
   midiErrorText: null,
+  transposeHoldMode: 'sustain',
 
   toggleBypass: () => set((state) => ({ bypass: !state.bypass })),
   setActiveChannels: (activeChannels) => set({ activeChannels }),
@@ -81,6 +85,7 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   setTransposeTarget: (transposeTarget) => set({ transposeTarget }),
   setMidiAccessStatus: (midiAccessStatus) => set({ midiAccessStatus }),
   setMidiErrorText: (midiErrorText) => set({ midiErrorText }),
+  setTransposeHoldMode: (transposeHoldMode) => set({ transposeHoldMode }),
 
   panic: () => {
     const outputs = get().midiOutputs;

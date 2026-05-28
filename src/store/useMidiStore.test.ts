@@ -3,6 +3,19 @@ import { useMidiStore } from './useMidiStore';
 import { useWebMidi } from '../hooks/useWebMidi';
 import { renderHook, act } from '@testing-library/react';
 
+describe('Zustand Store - Transpose Hold Mode TDD Checkpoint', () => {
+  it('Test Case 1: Zustand store initializes with transposeHoldMode === sustain', () => {
+    expect(useMidiStore.getState().transposeHoldMode).toBe('sustain');
+  });
+
+  it('Test Case 2: Calling setTransposeHoldMode successfully updates the state', () => {
+    useMidiStore.getState().setTransposeHoldMode('retrigger');
+    expect(useMidiStore.getState().transposeHoldMode).toBe('retrigger');
+    // Reset to sustain
+    useMidiStore.getState().setTransposeHoldMode('sustain');
+  });
+});
+
 describe('Global Zustand Store & Web MIDI Hook Phase 1 TDD Checkpoint', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -294,3 +307,235 @@ describe('MIDI Routing Engine Phase 5 TDD Checkpoint', () => {
     document.body.removeChild(mockKeyEl);
   });
 });
+
+describe('Web MIDI Hook - Active Note Tracking Phase 2 TDD Checkpoint', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('Test Case 1 & 2: Active note mapping and target changes Note Off sustain integrity', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const sendMock = vi.fn();
+    const mockOutput = {
+      id: 'output-1',
+      send: sendMock,
+    } as unknown as WebMidi.MIDIOutput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map([['output-1', mockOutput]]),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      midiOutputs: [mockOutput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTarget: 62, // Target is 62 (+2 semitones)
+      filterMode: 'block',
+      filterRange: [21, 108],
+      transposeHoldMode: 'sustain',
+    });
+
+    const { result } = renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Send Note On for input note 60
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 60, 100]) });
+    });
+
+    // Check outputs
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 62, 100]));
+
+    // Assert activeRoutedNotes contains 60 -> 62
+    const activeRoutedNotes = result.current.activeRoutedNotes;
+    expect(activeRoutedNotes.current.get(60)).toEqual(expect.objectContaining({ outNote: 62 }));
+
+    // Change transposeTarget to 64
+    act(() => {
+      useMidiStore.setState({ transposeTarget: 64 });
+    });
+
+    // Send Note Off for input note 60 (velocity 0 or 0x80 status)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x80, 60, 0]) });
+    });
+
+    // Assert that Note Off was sent for 62 (not 64)
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 62, 0]));
+
+    // Assert Map is cleared
+    expect(activeRoutedNotes.current.has(60)).toBe(false);
+  });
+});
+
+describe('Web MIDI Hook - Cutoff & Retrigger Engine Phase 3 TDD Checkpoint', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('Test Case 1: Cutoff Mode: Map clears and Note Offs trigger when transposeTarget changes', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const sendMock = vi.fn();
+    const mockOutput = {
+      id: 'output-1',
+      send: sendMock,
+    } as unknown as WebMidi.MIDIOutput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map([['output-1', mockOutput]]),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      midiOutputs: [mockOutput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTarget: 62, // Target is 62 (+2 semitones)
+      filterMode: 'block',
+      filterRange: [21, 108],
+      transposeHoldMode: 'cutoff',
+    });
+
+    const { result } = renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Send Note On for input note 60 (outputs 62)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 60, 100]) });
+    });
+
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 62, 100]));
+    const activeRoutedNotes = result.current.activeRoutedNotes;
+    expect(activeRoutedNotes.current.has(60)).toBe(true);
+
+    // Change transposeTarget to 64
+    act(() => {
+      useMidiStore.setState({ transposeTarget: 64 });
+    });
+
+    // Assert that Note Off for 62 was triggered
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 62, 0]));
+
+    // Assert Map is cleared in cutoff mode
+    expect(activeRoutedNotes.current.has(60)).toBe(false);
+  });
+
+  it('Test Case 2: Retrigger Mode: Note Off triggers for old note, Note On triggers for new note, Map updates', async () => {
+    let messageCallback: ((event: any) => void) | null = null;
+    const mockInput = {
+      id: 'input-1',
+      name: 'Mock MIDI Input',
+      get onmidimessage() { return messageCallback; },
+      set onmidimessage(cb) { messageCallback = cb; },
+    } as unknown as WebMidi.MIDIInput;
+
+    const sendMock = vi.fn();
+    const mockOutput = {
+      id: 'output-1',
+      send: sendMock,
+    } as unknown as WebMidi.MIDIOutput;
+
+    const mockMidiAccess = {
+      inputs: new Map([['input-1', mockInput]]),
+      outputs: new Map([['output-1', mockOutput]]),
+      onstatechange: null,
+    } as unknown as WebMidi.MIDIAccess;
+
+    vi.stubGlobal('navigator', {
+      requestMIDIAccess: vi.fn().mockResolvedValue(mockMidiAccess),
+    });
+
+    useMidiStore.setState({
+      selectedInputId: 'input-1',
+      midiInputs: [mockInput],
+      midiOutputs: [mockOutput],
+      zones: [
+        { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+        { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
+      ],
+      transposeOctave: 0,
+      playOctave: 0,
+      transposeOrigin: 60,
+      transposeTarget: 62, // Target is 62 (+2 semitones)
+      filterMode: 'block',
+      filterRange: [21, 108],
+      transposeHoldMode: 'retrigger',
+    });
+
+    const { result } = renderHook(() => useWebMidi());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Send Note On for input note 60 (outputs 62)
+    act(() => {
+      messageCallback!({ data: new Uint8Array([0x90, 60, 100]) });
+    });
+
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 62, 100]));
+    const activeRoutedNotes = result.current.activeRoutedNotes;
+    expect(activeRoutedNotes.current.has(60)).toBe(true);
+
+    // Change transposeTarget to 64
+    act(() => {
+      useMidiStore.setState({ transposeTarget: 64 });
+    });
+
+    // Assert that Note Off for 62 was triggered
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 62, 0]));
+
+    // Assert that Note On for 64 was triggered
+    expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x90, 64, 100]));
+
+    // Assert Map is updated to 64
+    expect(activeRoutedNotes.current.get(60)).toEqual(expect.objectContaining({ outNote: 64 }));
+  });
+});
+
+
