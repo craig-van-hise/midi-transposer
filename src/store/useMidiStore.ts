@@ -2,9 +2,9 @@ import { create } from 'zustand';
 
 export interface Zone {
   id: string;
+  type: 'transpose' | 'play';
   startNote: number;
   endNote: number;
-  channel: number;
   color: string;
   octave: number;
 }
@@ -20,6 +20,13 @@ export interface MidiStoreState {
   filterRange: [number, number]; // [min, max]
   midiInputs: WebMidi.MIDIInput[];
   midiOutputs: WebMidi.MIDIOutput[];
+  selectedInputId: string | null;
+  transposeOctave: number;
+  playOctave: number;
+  transposeOrigin: number;
+  transposeTarget: number;
+  midiAccessStatus: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error';
+  midiErrorText: string | null;
 
   toggleBypass: () => void;
   setActiveChannels: (channels: number[]) => void;
@@ -29,6 +36,13 @@ export interface MidiStoreState {
   setFilterRange: (range: [number, number]) => void;
   setMidiInputs: (inputs: WebMidi.MIDIInput[]) => void;
   setMidiOutputs: (outputs: WebMidi.MIDIOutput[]) => void;
+  setSelectedInputId: (id: string | null) => void;
+  setTransposeOctave: (octave: number) => void;
+  setPlayOctave: (octave: number) => void;
+  setTransposeOrigin: (origin: number) => void;
+  setTransposeTarget: (target: number) => void;
+  setMidiAccessStatus: (status: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error') => void;
+  setMidiErrorText: (text: string | null) => void;
   panic: () => void;
 }
 
@@ -36,15 +50,21 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   bypass: false,
   activeChannels: Array.from({ length: 16 }, (_, i) => i + 1), // Default channels 1-16
   zones: [
-    { id: 'z1', startNote: 21, endNote: 45, channel: 1, color: '#f43f5e', octave: 0 },
-    { id: 'z2', startNote: 46, endNote: 72, channel: 2, color: '#3b82f6', octave: 0 },
-    { id: 'z3', startNote: 73, endNote: 108, channel: 3, color: '#10b981', octave: 0 },
+    { id: 'z-trans', type: 'transpose', startNote: 21, endNote: 59, color: '#f43f5e', octave: 0 },
+    { id: 'z-play', type: 'play', startNote: 60, endNote: 108, color: '#3b82f6', octave: 0 },
   ],
   transposeAmount: 0,
   filterMode: 'block',
   filterRange: [21, 108],
   midiInputs: [],
   midiOutputs: [],
+  selectedInputId: null,
+  transposeOctave: 0,
+  playOctave: 0,
+  transposeOrigin: 60,
+  transposeTarget: 60,
+  midiAccessStatus: 'pending',
+  midiErrorText: null,
 
   toggleBypass: () => set((state) => ({ bypass: !state.bypass })),
   setActiveChannels: (activeChannels) => set({ activeChannels }),
@@ -54,6 +74,13 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   setFilterRange: (filterRange) => set({ filterRange }),
   setMidiInputs: (midiInputs) => set({ midiInputs }),
   setMidiOutputs: (midiOutputs) => set({ midiOutputs }),
+  setSelectedInputId: (selectedInputId) => set({ selectedInputId }),
+  setTransposeOctave: (transposeOctave) => set({ transposeOctave }),
+  setPlayOctave: (playOctave) => set({ playOctave }),
+  setTransposeOrigin: (transposeOrigin) => set({ transposeOrigin }),
+  setTransposeTarget: (transposeTarget) => set({ transposeTarget }),
+  setMidiAccessStatus: (midiAccessStatus) => set({ midiAccessStatus }),
+  setMidiErrorText: (midiErrorText) => set({ midiErrorText }),
 
   panic: () => {
     const outputs = get().midiOutputs;

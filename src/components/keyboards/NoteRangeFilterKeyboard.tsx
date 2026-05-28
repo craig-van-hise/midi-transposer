@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FilterMode } from '../../store/useMidiStore';
+import { FilterMode, useMidiStore } from '../../store/useMidiStore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export const WHITE_KEY_WIDTH = 19;
@@ -260,14 +260,25 @@ export const NoteRangeFilterKeyboard: React.FC<NoteRangeFilterKeyboardProps> = (
   range: externalRange,
   onRangeChange: externalOnRangeChange,
 }) => {
-  const [internalMode, setInternalMode] = React.useState<FilterMode>('block');
-  const [internalRange, setInternalRange] = React.useState<[number, number]>([21, 108]);
+  const store = useMidiStore();
 
-  const activeMode = externalMode !== undefined ? externalMode : internalMode;
-  const onModeChange = externalOnModeChange !== undefined ? externalOnModeChange : setInternalMode;
+  const activeMode = externalMode !== undefined ? externalMode : store.filterMode;
+  const onModeChange = (mode: FilterMode) => {
+    if (externalOnModeChange !== undefined) {
+      externalOnModeChange(mode);
+    } else {
+      store.setFilterMode(mode);
+    }
+  };
 
-  const range = externalRange !== undefined ? externalRange : internalRange;
-  const onRangeChange = externalOnRangeChange !== undefined ? externalOnRangeChange : setInternalRange;
+  const range = externalRange !== undefined ? externalRange : store.filterRange;
+  const onRangeChange = (r: [number, number]) => {
+    if (externalOnRangeChange !== undefined) {
+      externalOnRangeChange(r);
+    } else {
+      store.setFilterRange(r);
+    }
+  };
 
   const [hoveredMode, setHoveredMode] = React.useState<FilterMode | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useMidiStore } from '../../store/useMidiStore';
 
 export interface NoteRect {
   note: number;
@@ -38,8 +39,12 @@ export interface TransposeKeyboard88Props {
 }
 
 export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyboard88Props = {}) {
-  const [originNote, setOriginNote] = useState(DEFAULT_ORIGIN);
-  const [targetNote, setTargetNote] = useState(DEFAULT_ORIGIN);
+  const {
+    transposeOrigin: originNote,
+    setTransposeOrigin: setOriginNote,
+    transposeTarget: targetNote,
+    setTransposeTarget: setTargetNote,
+  } = useMidiStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -173,7 +178,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
   
   return (
     <div 
-      className={`relative bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.15)] outline-none w-[1020px] flex flex-col focus:ring-4 ring-blue-100 select-none transition-all duration-300 ${isCollapsed ? 'h-[40px]' : 'pt-[36px] pb-[16px] px-[16px]'}`}
+      className={`relative bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.15)] outline-none w-[1020px] flex flex-col focus:ring-4 ring-rose-100 select-none transition-all duration-300 ${isCollapsed ? 'h-[40px]' : 'pt-[36px] pb-[16px] px-[16px]'}`}
       tabIndex={0}
     >
       {/* Collapse Toggle */}
@@ -210,7 +215,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
               
               {/* Dynamic Fill */}
               <div 
-                className="absolute top-0 bottom-0 bg-blue-500 rounded-full transition-all duration-75"
+                className="absolute top-0 bottom-0 bg-rose-500 rounded-full transition-all duration-75"
                 style={{ 
                    left: trackFillStart, 
                    width: trackFillWidth 
@@ -227,10 +232,10 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
                  setIsDragging(true);
               }}
             >
-              <div className="w-[40px] h-[26px] bg-white border-2 border-blue-500 rounded-md shadow-md flex items-center justify-center font-mono text-sm font-bold text-gray-800 z-10">
+              <div className="w-[40px] h-[26px] bg-white border-2 border-rose-500 rounded-md shadow-md flex items-center justify-center font-mono text-sm font-bold text-gray-800 z-10">
                 {displayLabel}
               </div>
-              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-blue-500 -mt-[1px] z-0" />
+              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-rose-500 -mt-[1px] z-0" />
             </div>
           </div>
 
@@ -250,7 +255,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
                     width: '19px',
                     height: '88px',
                     flexShrink: 0,
-                    backgroundColor: isActive ? '#3b82f6' : (isOrigin ? '#f3f4f6' : '#ffffff'),
+                    backgroundColor: isActive ? '#f43f5e' : (isOrigin ? '#f3f4f6' : '#ffffff'),
                     borderLeft: '1px solid #7a7a7a',
                     borderRight: '1px solid #7a7a7a',
                     borderBottom: '1px solid #7a7a7a',
@@ -259,7 +264,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
                     borderBottomRightRadius: '4px',
                     cursor: 'pointer',
                     boxSizing: 'border-box',
-                    boxShadow: isActive ? 'inset 0 0 10px rgba(255,255,255,0.4), 0 0 8px rgba(59,130,246,0.6)' : 'none',
+                    boxShadow: isActive ? 'inset 0 0 10px rgba(255,255,255,0.4), 0 0 8px rgba(244,63,94,0.6)' : 'none',
                   }}
                   onMouseDown={(e) => handleKeyClick(e, n)}
                 >
@@ -293,7 +298,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
                     top: '-1px',
                     width: '11px',
                     height: '56px',
-                    backgroundColor: isActive ? '#3b82f6' : (isOrigin ? '#4b5563' : '#3a3a3a'),
+                    backgroundColor: isActive ? '#f43f5e' : (isOrigin ? '#4b5563' : '#3a3a3a'),
                     borderBottom: '8px solid #050505',
                     borderLeft: '2px solid #050505',
                     borderRight: '2px solid #050505',
@@ -301,7 +306,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
                     borderRadius: '0px',
                     cursor: 'pointer',
                     boxSizing: 'border-box',
-                    boxShadow: isActive ? 'inset 0 0 6px rgba(255,255,255,0.4), 0 0 10px rgba(59,130,246,0.8)' : 'none',
+                    boxShadow: isActive ? 'inset 0 0 6px rgba(255,255,255,0.4), 0 0 10px rgba(244,63,94,0.8)' : 'none',
                   }}
                   onMouseDown={(e) => {
                     e.stopPropagation();

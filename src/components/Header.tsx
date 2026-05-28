@@ -3,7 +3,18 @@ import { Power, Info, Settings, TriangleAlert } from 'lucide-react';
 import { useMidiStore } from '../store/useMidiStore';
 
 export default function Header() {
-  const { bypass, toggleBypass, panic, activeChannels, setActiveChannels } = useMidiStore();
+  const {
+    bypass,
+    toggleBypass,
+    panic,
+    activeChannels,
+    setActiveChannels,
+    midiInputs,
+    selectedInputId,
+    setSelectedInputId,
+    midiAccessStatus,
+    midiErrorText
+  } = useMidiStore();
   const [showInfo, setShowInfo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -24,6 +35,38 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* MIDI Selector */}
+        {midiAccessStatus === 'unsupported' ? (
+          <span className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold shadow-sm">
+            Browser Unsupported (Use Chrome/Edge)
+          </span>
+        ) : midiAccessStatus === 'error' ? (
+          <span className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold shadow-sm">
+            Error: {midiErrorText}
+          </span>
+        ) : (
+          <select
+            data-testid="midi-input-select"
+            value={selectedInputId || ''}
+            onChange={(e) => setSelectedInputId(e.target.value || null)}
+            className="px-3 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-sm"
+          >
+            {midiInputs.length === 0 ? (
+              <option value="">
+                {midiAccessStatus === 'granted'
+                  ? "0 Devices (Check if DAW has exclusive lock)"
+                  : "No MIDI inputs detected"}
+              </option>
+            ) : (
+              midiInputs.map((input) => (
+                <option key={input.id} value={input.id}>
+                  {input.name || `MIDI Device ${input.id}`}
+                </option>
+              ))
+            )}
+          </select>
+        )}
+
         {/* Power Button */}
         <button
           onClick={toggleBypass}

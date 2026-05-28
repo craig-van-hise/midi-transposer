@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Zone, 
   NoteRects, 
   whiteKeys, 
   blackKeys, 
   getLeftBound, 
   getRightBound, 
   getStartNoteFromX, 
-  getEndNoteFromX, 
-  getNextColor, 
-  getNextChannel 
+  getEndNoteFromX 
 } from './keyboardMap';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useMidiStore, Zone } from '../../store/useMidiStore';
 
 function OctaveKnob({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const startY = useRef(0);
@@ -45,7 +43,7 @@ function OctaveKnob({ value, onChange }: { value: number; onChange: (v: number) 
 
   return (
     <div
-      className="relative z-20 select-none cursor-ns-resize group p-1 rounded-full hover:bg-black/5 transition-colors flex items-center justify-center"
+      className="relative z-20 select-none cursor-ns-resize group p-1 rounded-full hover:bg-black/5 transition-colors flex items-center justify-center font-sans"
       onPointerDown={handlePointerDown}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
@@ -104,11 +102,15 @@ export interface KeySplitKeyboardProps {
 }
 
 export default function KeySplitKeyboard({ onZonesChange }: KeySplitKeyboardProps = {}) {
-  const [zones, setZones] = useState<Zone[]>([
-    { id: 'z1', startNote: 21, endNote: 45, channel: 1, color: '#f43f5e', octave: 0 },
-    { id: 'z2', startNote: 46, endNote: 72, channel: 2, color: '#3b82f6', octave: 0 },
-    { id: 'z3', startNote: 73, endNote: 108, channel: 3, color: '#10b981', octave: 0 },
-  ]);
+  const { 
+    zones, 
+    setZones, 
+    transposeOctave, 
+    setTransposeOctave, 
+    playOctave, 
+    setPlayOctave 
+  } = useMidiStore();
+
   const zonesRef = useRef<Zone[]>(zones);
   
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
@@ -123,6 +125,25 @@ export default function KeySplitKeyboard({ onZonesChange }: KeySplitKeyboardProp
     zonesRef.current = newZones;
     onZonesChange?.(newZones);
   };
+
+  useEffect(() => {
+    zonesRef.current = zones;
+  }, [zones]);
+
+  useEffect(() => {
+    const updated = zones.map(z => {
+      if (z.type === 'transpose' && z.octave !== transposeOctave) {
+        return { ...z, octave: transposeOctave };
+      }
+      if (z.type === 'play' && z.octave !== playOctave) {
+        return { ...z, octave: playOctave };
+      }
+      return z;
+    });
+    if (JSON.stringify(updated) !== JSON.stringify(zones)) {
+      setZones(updated);
+    }
+  }, [transposeOctave, playOctave, zones, setZones]);
 
   useEffect(() => {
     dragStateRef.current = dragState;
@@ -272,54 +293,27 @@ export default function KeySplitKeyboard({ onZonesChange }: KeySplitKeyboardProp
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && activeZoneId) {
-      e.stopPropagation();
-      applyZones(zonesRef.current.filter(z => z.id !== activeZoneId));
-      setActiveZoneId(null);
-    }
     if (e.key === 'Escape' && activeZoneId) {
       e.stopPropagation();
       setActiveZoneId(null);
     }
   };
 
-  const handleDoubleClick = (e: React.MouseEvent, zone: Zone) => {
-    const wrapper = document.getElementById('keyboard-wrapper');
-    if (!wrapper) return;
-    const rect = wrapper.getBoundingClientRect();
-    const localX = e.clientX - rect.left;
-    
-    // Find precise note exactly under the mouse pointer
-    let exactNote = 21;
-    for (let n = 21; n <= 108; n++) {
-      const l = getLeftBound(n);
-      const r = getRightBound(n);
-      if (localX >= l && localX <= r) {
-        exactNote = n;
-        break;
-      }
-    }
-
-    if (exactNote >= zone.startNote && exactNote < zone.endNote) {
-      const currentZones = zonesRef.current;
-      const newZone: Zone = {
-        id: Math.random().toString(36).substring(2, 9),
-        startNote: exactNote + 1,
-        endNote: zone.endNote,
-        channel: getNextChannel(currentZones),
-        color: getNextColor(currentZones),
-        octave: 0,
-      };
-      
-      applyZones([
-        ...currentZones.map(z => z.id === zone.id ? { ...z, endNote: exactNote } : z),
-        newZone
-      ]);
-    }
-  };
-
   const updateZoneField = (id: string, updates: Partial<Zone>) => {
-    applyZones(zonesRef.current.map(z => z.id === id ? { ...z, ...updates } : z));
+    const updated = zonesRef.current.map(z => {
+      if (z.id === id) {
+        if (updates.octave !== undefined) {
+          if (z.type === 'transpose') {
+            setTransposeOctave(updates.octave);
+          } else if (z.type === 'play') {
+            setPlayOctave(updates.octave);
+          }
+        }
+        return { ...z, ...updates };
+      }
+      return z;
+    });
+    applyZones(updated);
   };
 
   // Zero-latency direct DOM manipulation simulating real-time MIDI input
@@ -389,7 +383,7 @@ export default function KeySplitKeyboard({ onZonesChange }: KeySplitKeyboardProp
     >
       {/* Collapse Toggle */}
       <div 
-        className="absolute top-[10px] left-[14px] flex items-center gap-1.5 cursor-pointer z-30 opacity-70 hover:opacity-100 transition-opacity"
+        className="absolute top-[10px] left-[14px] flex items-center gap-1.5 cursor-pointer z-30 opacity-70 hover:opacity-100 transition-opacity font-sans"
         onClick={(e) => {
           e.stopPropagation();
           setIsCollapsed(!isCollapsed);
@@ -463,26 +457,11 @@ export default function KeySplitKeyboard({ onZonesChange }: KeySplitKeyboardProp
                     clickOffsetX: e.clientX - e.currentTarget.getBoundingClientRect().left
                   });
                 }}
-                onDoubleClick={(e) => handleDoubleClick(e, zone)}
               >
-                {/* Embedded Badge Dropdown */}
-                <div 
-                  className="z-20 px-2 py-[1px] rounded-full bg-black/20 hover:bg-black/30 transition-colors flex items-center shadow-sm" 
-                  onMouseDown={e => e.stopPropagation()}
-                  onDoubleClick={e => e.stopPropagation()}
-                >
-                  <select
-                     value={zone.channel}
-                     onChange={(e) => updateZoneField(zone.id, { channel: parseInt(e.target.value) })}
-                     className="appearance-none bg-transparent outline-none text-white font-bold text-[10px] cursor-pointer text-center"
-                  >
-                    {Array.from({ length: 16 }).map((_, i) => (
-                      <option key={i + 1} value={i + 1} className="text-gray-900 font-sans">
-                        Channel {i + 1}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Static Label */}
+                <span className="text-[10px] font-bold text-white uppercase tracking-wider font-sans select-none pointer-events-none">
+                  {zone.type === 'transpose' ? 'Transpose' : 'Play'}
+                </span>
 
                 {/* Left Grip Handle */}
                 {(!isTouchingPrev || isShiftDown) && (

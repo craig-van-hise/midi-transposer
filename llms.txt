@@ -1,0 +1,14 @@
+# MIDI Transposer
+
+A modular real-time Web MIDI transposer application built with React, TypeScript, and Zustand.
+
+## Core Documentation
+- [PROJECT_STATE](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/PROJECT_STATE.md)
+- [README](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/README.md)
+
+## Key Source Files
+- [Store Architecture](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/src/store/useMidiStore.ts)
+- [Web MIDI Pipeline Hook](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/src/hooks/useWebMidi.ts)
+- [KeySplit Keyboard Component](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/src/components/keyboards/KeySplitKeyboard.tsx)
+- [Application Entry](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/src/App.tsx)
+- [MIDI Transposition Math Utils](file:///Users/vv2024/Documents/Repos%20-%20vv2024/MIDI/WebApps/midi-transposer/src/utils/midiPipeline.ts)
