@@ -22,7 +22,7 @@ const baseState: MidiStoreState = {
   polyphonyMode: 'mono',
   midiAccessStatus: 'granted',
   midiErrorText: null,
-  transposeHoldMode: 'sustain',
+  transposeSustainMode: 'sustain',
   toggleBypass: () => {},
   setActiveChannels: () => {},
   setZones: () => {},
@@ -40,7 +40,7 @@ const baseState: MidiStoreState = {
   setPolyphonyMode: () => {},
   setMidiAccessStatus: () => {},
   setMidiErrorText: () => {},
-  setTransposeHoldMode: () => {},
+  setTransposeSustainMode: () => {},
   panic: () => {},
 };
 
@@ -119,4 +119,45 @@ describe('MIDI Pipeline Engine Phase 4 TDD Checkpoint', () => {
     expect(output).toHaveLength(1);
     expect(output[0]).toEqual(new Uint8Array([0x90, 48, 100]));
   });
+
+  describe('Smart Wrap TDD Checkpoints', () => {
+    it('Test Case 1: Range [21, 108], Input note 109 (C#) -> Wraps to 25 (Lowest C# in range)', () => {
+      const state = {
+        ...baseState,
+        zones: [
+          { ...baseState.zones[0], endNote: 120 }
+        ],
+        filterMode: 'smart_wrap' as const,
+        filterRange: [21, 108] as [number, number],
+      };
+      const input = new Uint8Array([0x90, 109, 100]);
+      const output = processMidiMessage(input, state);
+      expect(output).toHaveLength(1);
+      expect(output[0]).toEqual(new Uint8Array([0x90, 25, 100]));
+    });
+
+    it('Test Case 2: Range [60, 108], Input note 59 (B) -> Wraps to 107 (Highest B in range)', () => {
+      const state = {
+        ...baseState,
+        filterMode: 'smart_wrap' as const,
+        filterRange: [60, 108] as [number, number],
+      };
+      const input = new Uint8Array([0x90, 59, 100]);
+      const output = processMidiMessage(input, state);
+      expect(output).toHaveLength(1);
+      expect(output[0]).toEqual(new Uint8Array([0x90, 107, 100]));
+    });
+
+    it('Test Case 3: Failsafe: Range [60, 65] (C to F), Input note 67 (G) -> shouldDrop === true (empty output)', () => {
+      const state = {
+        ...baseState,
+        filterMode: 'smart_wrap' as const,
+        filterRange: [60, 65] as [number, number],
+      };
+      const input = new Uint8Array([0x90, 67, 100]);
+      const output = processMidiMessage(input, state);
+      expect(output).toHaveLength(0);
+    });
+  });
 });
+

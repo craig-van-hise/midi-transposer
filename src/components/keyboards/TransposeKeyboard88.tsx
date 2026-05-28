@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import { useMidiStore } from '../../store/useMidiStore';
+import { Modal } from '../ui/Modal';
+import { Tooltip } from '../ui/Tooltip';
 
 export interface NoteRect {
   note: number;
@@ -47,8 +49,8 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
     setTransposeTargets,
     polyphonyMode,
     setPolyphonyMode,
-    transposeHoldMode,
-    setTransposeHoldMode,
+    transposeSustainMode,
+    setTransposeSustainMode,
   } = useMidiStore();
 
   const activeTargets = transposeTargets && transposeTargets.includes(targetNote)
@@ -57,17 +59,7 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setIsSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
 
   useEffect(() => {
     onTransposeChange?.(targetNote - originNote);
@@ -243,98 +235,103 @@ export default function TransposeKeyboard88({ onTransposeChange }: TransposeKeyb
         <span className="font-semibold text-[14px] text-gray-700 select-none">Transpose</span>
       </div>
 
-      {/* Transpose Settings Gear Icon / Dropdown */}
+      {/* Transpose Settings Gear Icon */}
       <div 
         className="absolute top-[10px] right-[14px] flex items-center z-30 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
-        ref={settingsRef}
         title="Transpose Settings"
         onClick={(e) => {
           e.stopPropagation();
-          setIsSettingsOpen(!isSettingsOpen);
+          setIsSettingsOpen(true);
         }}
       >
         <Settings 
           className="w-4 h-4 text-gray-700 pointer-events-none" 
           strokeWidth={2.5}
         />
-        {isSettingsOpen && (
-          <div className="absolute right-0 top-[24px] w-[240px] bg-white border border-gray-200 rounded-md shadow-lg p-3 z-50 flex flex-col gap-2.5 text-left font-sans select-none text-gray-800">
-            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Polyphony Mode</span>
-            <div className="flex gap-4 mb-1">
-              <label className="flex items-center gap-1.5 cursor-pointer text-[13px]">
-                <input 
-                  type="radio" 
-                  name="polyphonyMode" 
-                  value="mono" 
-                  checked={polyphonyMode === 'mono'} 
-                  onChange={() => setPolyphonyMode('mono')}
-                  className="accent-rose-500 cursor-pointer"
-                />
-                <span className="font-semibold text-gray-800">Mono</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer text-[13px]">
-                <input 
-                  type="radio" 
-                  name="polyphonyMode" 
-                  value="poly" 
-                  checked={polyphonyMode === 'poly'} 
-                  onChange={() => setPolyphonyMode('poly')}
-                  className="accent-rose-500 cursor-pointer"
-                />
-                <span className="font-semibold text-gray-800">Poly</span>
-              </label>
-            </div>
-
-            <hr className="border-gray-100" />
-
-            <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Transpose Hold Mode</span>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-start gap-2 cursor-pointer text-[13px] hover:bg-gray-50 p-1.5 rounded">
-                <input 
-                  type="radio" 
-                  name="holdMode" 
-                  value="sustain" 
-                  checked={transposeHoldMode === 'sustain'} 
-                  onChange={() => setTransposeHoldMode('sustain')}
-                  className="mt-[3px] accent-rose-500 cursor-pointer"
-                />
-                <div>
-                  <div className="font-semibold text-gray-800">Sustain Original</div>
-                  <div className="text-[11px] text-gray-500 font-normal leading-tight">Notes finish playing on their original pitch.</div>
-                </div>
-              </label>
-              <label className="flex items-start gap-2 cursor-pointer text-[13px] hover:bg-gray-50 p-1.5 rounded">
-                <input 
-                  type="radio" 
-                  name="holdMode" 
-                  value="cutoff" 
-                  checked={transposeHoldMode === 'cutoff'} 
-                  onChange={() => setTransposeHoldMode('cutoff')}
-                  className="mt-[3px] accent-rose-500 cursor-pointer"
-                />
-                <div>
-                  <div className="font-semibold text-gray-800">Immediate Cutoff</div>
-                  <div className="text-[11px] text-gray-500 font-normal leading-tight">Held notes are instantly silenced.</div>
-                </div>
-              </label>
-              <label className="flex items-start gap-2 cursor-pointer text-[13px] hover:bg-gray-50 p-1.5 rounded">
-                <input 
-                  type="radio" 
-                  name="holdMode" 
-                  value="retrigger" 
-                  checked={transposeHoldMode === 'retrigger'} 
-                  onChange={() => setTransposeHoldMode('retrigger')}
-                  className="mt-[3px] accent-rose-500 cursor-pointer"
-                />
-                <div>
-                  <div className="font-semibold text-gray-800">Retrigger</div>
-                  <div className="text-[11px] text-gray-500 font-normal leading-tight">Held notes instantly shift to the new pitch.</div>
-                </div>
-              </label>
-            </div>
-          </div>
-        )}
       </div>
+
+      <Modal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        title="Transpose Settings"
+      >
+        <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Polyphony Mode</span>
+        <div className="flex gap-4 mb-1">
+          <Tooltip content="Mono: Single note shifting">
+            <label className="flex items-center gap-1.5 cursor-pointer text-[13px]">
+              <input 
+                type="radio" 
+                name="polyphonyMode" 
+                value="mono" 
+                checked={polyphonyMode === 'mono'} 
+                onChange={() => setPolyphonyMode('mono')}
+                className="accent-rose-500 cursor-pointer"
+              />
+              <span className="font-semibold text-gray-800">Mono</span>
+            </label>
+          </Tooltip>
+          <Tooltip content="Allows parallel chord transpositions. Enforces strict monophonic (last-note priority) playing in the Play zone.">
+            <label className="flex items-center gap-1.5 cursor-pointer text-[13px]">
+              <input 
+                type="radio" 
+                name="polyphonyMode" 
+                value="poly" 
+                checked={polyphonyMode === 'poly'} 
+                onChange={() => setPolyphonyMode('poly')}
+                className="accent-rose-500 cursor-pointer"
+              />
+              <span className="font-semibold text-gray-800">Poly</span>
+            </label>
+          </Tooltip>
+        </div>
+
+        <hr className="border-neutral-100 my-1" />
+
+        <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Transpose Sustain Mode</span>
+        <div className="flex flex-col gap-2">
+          <Tooltip content="Notes finish playing on their original pitch.">
+            <label className="flex items-center gap-2 cursor-pointer text-[13px] hover:bg-neutral-50 p-1.5 rounded w-full">
+              <input 
+                type="radio" 
+                name="holdMode" 
+                value="sustain" 
+                checked={transposeSustainMode === 'sustain'} 
+                onChange={() => setTransposeSustainMode('sustain')}
+                className="accent-rose-500 cursor-pointer"
+              />
+              <span className="font-semibold text-gray-800">Sustain Original</span>
+            </label>
+          </Tooltip>
+
+          <Tooltip content="Held notes are instantly silenced.">
+            <label className="flex items-center gap-2 cursor-pointer text-[13px] hover:bg-neutral-50 p-1.5 rounded w-full">
+              <input 
+                type="radio" 
+                name="holdMode" 
+                value="cutoff" 
+                checked={transposeSustainMode === 'cutoff'} 
+                onChange={() => setTransposeSustainMode('cutoff')}
+                className="accent-rose-500 cursor-pointer"
+              />
+              <span className="font-semibold text-gray-800">Immediate Cutoff</span>
+            </label>
+          </Tooltip>
+
+          <Tooltip content="Held notes instantly shift to the new pitch.">
+            <label className="flex items-center gap-2 cursor-pointer text-[13px] hover:bg-neutral-50 p-1.5 rounded w-full">
+              <input 
+                type="radio" 
+                name="holdMode" 
+                value="retrigger" 
+                checked={transposeSustainMode === 'retrigger'} 
+                onChange={() => setTransposeSustainMode('retrigger')}
+                className="accent-rose-500 cursor-pointer"
+              />
+              <span className="font-semibold text-gray-800">Retrigger</span>
+            </label>
+          </Tooltip>
+        </div>
+      </Modal>
 
       {!isCollapsed && (
         <>

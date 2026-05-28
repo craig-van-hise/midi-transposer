@@ -79,7 +79,35 @@ export function processMidiMessage(
       if (note < min || note > max) {
         shouldDrop = true;
       }
+    } else if (state.filterMode === 'smart_wrap') {
+      if (note < min || note > max) {
+        // Safe positive modulo for pitch class (0-11)
+        const pc = ((note % 12) + 12) % 12;
+
+        if (note > max) {
+          // Exceeded top. Find lowest valid note at the bottom.
+          let wrapped = min - (min % 12) + pc;
+          if (wrapped < min) wrapped += 12;
+
+          if (wrapped <= max) {
+            note = wrapped;
+          } else {
+            shouldDrop = true; // Pitch class does not exist in this narrow range
+          }
+        } else if (note < min) {
+          // Exceeded bottom. Find highest valid note at the top.
+          let wrapped = max - (max % 12) + pc;
+          if (wrapped > max) wrapped -= 12;
+
+          if (wrapped >= min) {
+            note = wrapped;
+          } else {
+            shouldDrop = true;
+          }
+        }
+      }
     }
+
 
     if (!shouldDrop) {
       const finalNote = Math.max(0, Math.min(127, note));

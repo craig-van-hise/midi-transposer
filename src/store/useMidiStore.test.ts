@@ -3,16 +3,16 @@ import { useMidiStore } from './useMidiStore';
 import { useWebMidi } from '../hooks/useWebMidi';
 import { renderHook, act } from '@testing-library/react';
 
-describe('Zustand Store - Transpose Hold Mode TDD Checkpoint', () => {
-  it('Test Case 1: Zustand store initializes with transposeHoldMode === sustain', () => {
-    expect(useMidiStore.getState().transposeHoldMode).toBe('sustain');
+describe('Zustand Store - Transpose Sustain Mode TDD Checkpoint', () => {
+  it('Test Case 1: Zustand store initializes with transposeSustainMode === sustain', () => {
+    expect(useMidiStore.getState().transposeSustainMode).toBe('sustain');
   });
 
-  it('Test Case 2: Calling setTransposeHoldMode successfully updates the state', () => {
-    useMidiStore.getState().setTransposeHoldMode('retrigger');
-    expect(useMidiStore.getState().transposeHoldMode).toBe('retrigger');
+  it('Test Case 2: Calling setTransposeSustainMode successfully updates the state', () => {
+    useMidiStore.getState().setTransposeSustainMode('retrigger');
+    expect(useMidiStore.getState().transposeSustainMode).toBe('retrigger');
     // Reset to sustain
-    useMidiStore.getState().setTransposeHoldMode('sustain');
+    useMidiStore.getState().setTransposeSustainMode('sustain');
   });
 });
 
@@ -352,7 +352,7 @@ describe('Web MIDI Hook - Active Note Tracking Phase 2 TDD Checkpoint', () => {
       transposeTarget: 62, // Target is 62 (+2 semitones)
       filterMode: 'block',
       filterRange: [21, 108],
-      transposeHoldMode: 'sustain',
+      transposeSustainMode: 'sustain',
     });
 
     const { result } = renderHook(() => useWebMidi());
@@ -435,7 +435,7 @@ describe('Web MIDI Hook - Cutoff & Retrigger Engine Phase 3 TDD Checkpoint', () 
       transposeTarget: 62, // Target is 62 (+2 semitones)
       filterMode: 'block',
       filterRange: [21, 108],
-      transposeHoldMode: 'cutoff',
+      transposeSustainMode: 'cutoff',
     });
 
     const { result } = renderHook(() => useWebMidi());
@@ -504,7 +504,7 @@ describe('Web MIDI Hook - Cutoff & Retrigger Engine Phase 3 TDD Checkpoint', () 
       transposeTarget: 62, // Target is 62 (+2 semitones)
       filterMode: 'block',
       filterRange: [21, 108],
-      transposeHoldMode: 'retrigger',
+      transposeSustainMode: 'retrigger',
     });
 
     const { result } = renderHook(() => useWebMidi());
@@ -823,6 +823,14 @@ describe('Play Zone Last-Note Priority TDD Checkpoint', () => {
     expect(sendMock).toHaveBeenCalledWith(new Uint8Array([0x80, 69, 0]));
   });
 });
+
+describe('Smart Wrap Filter Mode Store Phase 1 TDD Checkpoint', () => {
+  it('Test Case 1: Store allows setFilterMode("smart_wrap") and sets state correctly', () => {
+    useMidiStore.getState().setFilterMode('smart_wrap');
+    expect(useMidiStore.getState().filterMode).toBe('smart_wrap');
+  });
+});
+
 
 
 

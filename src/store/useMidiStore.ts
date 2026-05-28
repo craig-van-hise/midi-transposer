@@ -9,8 +9,8 @@ export interface Zone {
   octave: number;
 }
 
-export type FilterMode = 'block' | 'limit' | 'octave_wrap' | 'wrap';
-export type TransposeHoldMode = 'sustain' | 'cutoff' | 'retrigger';
+export type FilterMode = 'block' | 'limit' | 'octave_wrap' | 'wrap' | 'smart_wrap';
+export type TransposeSustainMode = 'sustain' | 'cutoff' | 'retrigger';
 
 export interface MidiStoreState {
   bypass: boolean;
@@ -30,7 +30,7 @@ export interface MidiStoreState {
   polyphonyMode: 'mono' | 'poly';
   midiAccessStatus: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error';
   midiErrorText: string | null;
-  transposeHoldMode: TransposeHoldMode;
+  transposeSustainMode: TransposeSustainMode;
 
   toggleBypass: () => void;
   setActiveChannels: (channels: number[]) => void;
@@ -49,7 +49,7 @@ export interface MidiStoreState {
   setPolyphonyMode: (mode: 'mono' | 'poly') => void;
   setMidiAccessStatus: (status: 'pending' | 'granted' | 'denied' | 'unsupported' | 'error') => void;
   setMidiErrorText: (text: string | null) => void;
-  setTransposeHoldMode: (mode: TransposeHoldMode) => void;
+  setTransposeSustainMode: (mode: TransposeSustainMode) => void;
   panic: () => void;
 }
 
@@ -74,7 +74,7 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   polyphonyMode: 'mono',
   midiAccessStatus: 'pending',
   midiErrorText: null,
-  transposeHoldMode: 'sustain',
+  transposeSustainMode: 'sustain',
 
   toggleBypass: () => set((state) => ({ bypass: !state.bypass })),
   setActiveChannels: (activeChannels) => set({ activeChannels }),
@@ -99,7 +99,7 @@ export const useMidiStore = create<MidiStoreState>((set, get) => ({
   setPolyphonyMode: (polyphonyMode) => set({ polyphonyMode }),
   setMidiAccessStatus: (midiAccessStatus) => set({ midiAccessStatus }),
   setMidiErrorText: (midiErrorText) => set({ midiErrorText }),
-  setTransposeHoldMode: (transposeHoldMode) => set({ transposeHoldMode }),
+  setTransposeSustainMode: (transposeSustainMode) => set({ transposeSustainMode }),
 
   panic: () => {
     const outputs = get().midiOutputs;

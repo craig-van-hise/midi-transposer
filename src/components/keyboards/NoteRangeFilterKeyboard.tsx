@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { FilterMode, useMidiStore } from '../../store/useMidiStore';
 import { ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import { Modal } from '../ui/Modal';
+import { Tooltip } from '../ui/Tooltip';
 
 export const WHITE_KEY_WIDTH = 19;
 export const WHITE_KEY_HEIGHT = 88;
@@ -43,6 +45,7 @@ const MODE_DESCRIPTIONS: Record<FilterMode, string> = {
   block: 'Mutes notes that fall outside the active range.',
   octave_wrap: 'Folds out-of-range notes by shifting them up or down by octaves until they fit.',
   wrap: 'Folds out-of-range notes back into the range directly.',
+  smart_wrap: 'Wraps out-of-bounds notes to the opposite end of the range, strictly locking to the same pitch class.',
   limit: 'Clamps out-of-range notes to the nearest edge (min or max).'
 };
 
@@ -282,87 +285,74 @@ export const NoteRangeFilterKeyboard: React.FC<NoteRangeFilterKeyboardProps> = (
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setIsSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
 
   return (
     <div 
-      className={`relative bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-neutral-200 outline-none w-[1020px] flex flex-col focus:ring-4 ring-blue-100 select-none transition-all duration-300 mx-auto ${isCollapsed ? 'h-[40px] overflow-hidden pt-1 pb-1 px-[16px]' : 'pt-4 pb-4 px-[16px]'}`}
+      className={`relative bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.15)] border border-neutral-200 outline-none w-[1020px] flex flex-col focus:ring-4 ring-blue-100 select-none transition-all duration-300 mx-auto ${isCollapsed ? 'h-[40px] overflow-hidden pt-1 pb-1 px-[16px]' : 'pt-[36px] pb-[16px] px-[16px]'}`}
       data-testid="outer-card"
       tabIndex={0}
     >
-      <div className="relative w-full h-[32px] flex items-center">
-        {/* Collapse Toggle / Output label */}
-        <div 
-          className="flex items-center gap-1.5 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsCollapsed(!isCollapsed);
-          }}
-          title="Toggle Keyboard"
-        >
-          {isCollapsed ? (
-            <ChevronDown className="w-4 h-4 text-gray-700" strokeWidth={2.5} />
-          ) : (
-            <ChevronUp className="w-4 h-4 text-gray-700" strokeWidth={2.5} />
-          )}
-          <span className="font-semibold text-[14px] text-gray-700 select-none">Output</span>
-        </div>
-
-        {/* Output Settings Gear Icon / Dropdown */}
-        <div 
-          className="absolute top-[10px] right-[14px] flex items-center z-30 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
-          ref={settingsRef}
-          title="Output Filter Settings"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsSettingsOpen(!isSettingsOpen);
-          }}
-        >
-          <Settings 
-            className="w-4 h-4 text-gray-700" 
-            strokeWidth={2.5}
-          />
-          {isSettingsOpen && (
-            <div className="absolute right-0 top-[24px] w-[240px] bg-white border border-gray-200 rounded-md shadow-lg p-3 z-50 flex flex-col gap-2.5 text-left font-sans select-none text-gray-800">
-              <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Filter Mode</span>
-              <div className="flex flex-col gap-2">
-                {(['block', 'limit', 'octave_wrap', 'wrap'] as FilterMode[]).map((mode) => (
-                  <label key={mode} className="flex items-start gap-2 cursor-pointer text-[13px] hover:bg-gray-50 p-1.5 rounded" data-testid={`filter-mode-option-${mode}`}>
-                    <input 
-                      type="radio" 
-                      name="filterMode" 
-                      value={mode} 
-                      checked={activeMode === mode} 
-                      onChange={() => onModeChange(mode)}
-                      className="mt-[3px] accent-blue-500 cursor-pointer"
-                    />
-                    <div>
-                      <div className="font-semibold text-gray-800">
-                        {mode === 'block' ? 'Block' :
-                         mode === 'limit' ? 'Limit' :
-                         mode === 'octave_wrap' ? 'Octave Wrap' : 'Wrap'}
-                      </div>
-                      <div className="text-[11px] text-gray-500 font-normal leading-tight">
-                        {MODE_DESCRIPTIONS[mode]}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Collapse Toggle */}
+      <div 
+        className="absolute top-[10px] left-[14px] flex items-center gap-1.5 cursor-pointer z-30 opacity-70 hover:opacity-100 transition-opacity"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsCollapsed(!isCollapsed);
+        }}
+        title="Toggle Keyboard"
+      >
+        {isCollapsed ? (
+          <ChevronDown className="w-4 h-4 text-gray-700" strokeWidth={2.5} />
+        ) : (
+          <ChevronUp className="w-4 h-4 text-gray-700" strokeWidth={2.5} />
+        )}
+        <span className="font-semibold text-[14px] text-gray-700 select-none">Output</span>
       </div>
+
+      {/* Output Settings Gear Icon */}
+      <div 
+        className="absolute top-[10px] right-[14px] flex items-center z-30 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+        title="Output Filter Settings"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsSettingsOpen(true);
+        }}
+      >
+        <Settings 
+          className="w-4 h-4 text-gray-700 pointer-events-none" 
+          strokeWidth={2.5}
+        />
+      </div>
+
+      <Modal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        title="Output Settings"
+      >
+        <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Filter Mode</span>
+        <div className="flex flex-col gap-2">
+          {(['block', 'octave_wrap', 'wrap', 'smart_wrap', 'limit'] as FilterMode[]).map((mode) => (
+            <Tooltip key={mode} content={MODE_DESCRIPTIONS[mode]}>
+              <label className="flex items-center gap-2 cursor-pointer text-[13px] hover:bg-neutral-50 p-1.5 rounded w-full" data-testid={`filter-mode-option-${mode}`}>
+                <input 
+                  type="radio" 
+                  name="filterMode" 
+                  value={mode} 
+                  checked={activeMode === mode} 
+                  onChange={() => onModeChange(mode)}
+                  className="accent-blue-500 cursor-pointer"
+                />
+                <span className="font-semibold text-gray-800">
+                  {mode === 'block' ? 'Block' :
+                   mode === 'octave_wrap' ? 'Octave Wrap' :
+                   mode === 'wrap' ? 'Wrap' :
+                   mode === 'smart_wrap' ? 'Smart Wrap' : 'Limit'}
+                </span>
+              </label>
+            </Tooltip>
+          ))}
+        </div>
+      </Modal>
 
       {!isCollapsed && (
         <div className="relative w-[988px] mx-auto flex flex-col items-center gap-1" data-testid="coordinate-lock-container">

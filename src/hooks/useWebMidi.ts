@@ -51,6 +51,33 @@ export function useWebMidi() {
       if (finalNote < min || finalNote > max) {
         shouldDrop = true;
       }
+    } else if (filterMode === 'smart_wrap') {
+      if (finalNote < min || finalNote > max) {
+        // Safe positive modulo for pitch class (0-11)
+        const pc = ((finalNote % 12) + 12) % 12;
+
+        if (finalNote > max) {
+          // Exceeded top. Find lowest valid note at the bottom.
+          let wrapped = min - (min % 12) + pc;
+          if (wrapped < min) wrapped += 12;
+
+          if (wrapped <= max) {
+            finalNote = wrapped;
+          } else {
+            shouldDrop = true; // Pitch class does not exist in this narrow range
+          }
+        } else if (finalNote < min) {
+          // Exceeded bottom. Find highest valid note at the top.
+          let wrapped = max - (max % 12) + pc;
+          if (wrapped > max) wrapped -= 12;
+
+          if (wrapped >= min) {
+            finalNote = wrapped;
+          } else {
+            shouldDrop = true;
+          }
+        }
+      }
     }
 
     const outNote = Math.max(0, Math.min(127, finalNote));
@@ -350,7 +377,7 @@ export function useWebMidi() {
     const unsub = useMidiStore.subscribe((state, prevState) => {
       const targetsChanged = !arraysEqual(state.transposeTargets, prevState.transposeTargets);
       if (!targetsChanged && state.transposeTarget === prevState.transposeTarget) return;
-      if (state.transposeHoldMode === 'sustain') return;
+      if (state.transposeSustainMode === 'sustain') return;
 
       activeRoutedNotes.current.forEach((activeData, incomingNote) => {
         // 1. Always send Note Off for the currently playing notes
@@ -360,10 +387,10 @@ export function useWebMidi() {
           triggerVisualNoteFeedback(outNote, false, '#3b82f6');
         });
 
-        if (state.transposeHoldMode === 'cutoff') {
+        if (state.transposeSustainMode === 'cutoff') {
           activeRoutedNotes.current.delete(incomingNote);
         } 
-        else if (state.transposeHoldMode === 'retrigger') {
+        else if (state.transposeSustainMode === 'retrigger') {
           // 2. Calculate new notes
           const newOutNotes = calculateFinalNotes(incomingNote, state);
           if (newOutNotes.length > 0) {

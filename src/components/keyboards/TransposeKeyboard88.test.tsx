@@ -70,4 +70,20 @@ describe('TransposeKeyboard88 Zustand Wiring Phase 4 TDD Checkpoint', () => {
     expect(handle60.style.transform).toBe('translateY(-100%)');
     expect(handle61.style.transform).toBe('translateY(20%)');
   });
+
+  it('Test Case 4: Clicking the settings cog opens the Transpose Settings Modal', () => {
+    render(<TransposeKeyboard88 />);
+    
+    expect(screen.queryByText('Transpose Settings')).toBeNull();
+
+    const settingsBtn = screen.getByTitle('Transpose Settings');
+    fireEvent.click(settingsBtn);
+
+    expect(screen.getByText('Transpose Settings')).toBeInTheDocument();
+
+    const closeBtn = screen.getByTestId('modal-close-button');
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByText('Transpose Settings')).toBeNull();
+  });
 });
